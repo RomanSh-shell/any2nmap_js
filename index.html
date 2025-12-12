@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конвертер треков для Народных Карт</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .input-group { margin-bottom: 1em; }
+        label { display: block; margin-bottom: 0.5em; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 0.5em; box-sizing: border-box; }
+        button { padding: 0.7em 1.5em; cursor: pointer; }
+        #status { margin-top: 1em; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Конвертер треков в формат "Блокнота картографа"</h1>
+        <p>Перепишем Python скрипт на JavaScript для работы в браузере.</p>
+
+        <div id="auth-block">
+             <div class="input-group">
+                <label for="client-id">Укажите ваш Client ID приложения Яндекс.OAuth</label>
+                <input type="text" id="client-id" placeholder="Вставьте ваш Client ID сюда">
+                <small>Получить Client ID можно в <a href="https://oauth.yandex.ru/" target="_blank" rel="noopener noreferrer">консоли разработчика Яндекса</a>.</small>
+            </div>
+            <div class="input-group">
+                <button id="login-yandex">Войти через Яндекс</button>
+            </div>
+        </div>
+
+        <div id="app" style="display: none;">
+            <div class="input-group">
+                <label for="file-input">1. Выберите файл для конвертации (GPX, KML, KMZ, CSV)</label>
+                <input type="file" id="file-input" accept=".gpx,.kml,.kmz,.csv">
+            </div>
+
+            <div class="input-group">
+                <label for="folder-name">2. Введите название для папки на Яндекс Диске</label>
+                <input type="text" id="folder-name" placeholder="например, 2023-10-27_прогулка">
+            </div>
+
+            <div class="input-group">
+                <button id="convert-upload">3. Конвертировать и загрузить</button>
+            </div>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
