@@ -1,7 +1,6 @@
 /*
  * Основной JavaScript-модуль для конвертера треков Any2Nmap.
- * Для работы этого скрипта требуется API браузерных расширений (chrome.*)
- * и подключенная библиотека JSZip.
+ * Логика формирования JSON полностью соответствует оригинальному скрипту gpx2nmap.py.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,14 +14,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const folderNameInput = document.getElementById('folder-name');
     const convertBtn = document.getElementById('convert-upload');
 
-    // --- Локализация для динамических атрибутов ---
     folderNameInput.placeholder = chrome.i18n.getMessage('folderNamePlaceholder');
-
 
     let yandexToken = null;
 
     // =================================================================
-    // --- ЛОГИКА АВТОРИЗАЦИИ (Chrome Extension Identity API) ---
+    // --- АВТОРИЗАЦИЯ ---
     // =================================================================
 
     function getAuthToken(interactive) {
@@ -30,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDiv.textContent = 'Error: Extension API is not available.';
             return;
         }
-
         chrome.identity.getAuthToken({ interactive: interactive }, (token) => {
             if (chrome.runtime.lastError || !token) {
                 const errorMessage = chrome.i18n.getMessage('statusAuthFailure') + (chrome.runtime.lastError ? ` ${chrome.runtime.lastError.message}` : '');
@@ -50,38 +46,47 @@ document.addEventListener('DOMContentLoaded', () => {
         statusDiv.textContent = chrome.i18n.getMessage('statusAuthSuccess');
     }
 
-    loginBtn.addEventListener('click', () => {
-        getAuthToken(true);
-    });
-
+    loginBtn.addEventListener('click', () => getAuthToken(true));
     getAuthToken(false);
-
 
     // =================================================================
     // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
     // =================================================================
 
-    function uuidv4() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
+    const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 
-    function middle_point(path) {
+    const middle_point = (path) => {
         if (path.length > 2) return path[Math.floor((path.length - 1) / 2)];
         if (path.length === 2) return [(path[0][0] + path[1][0]) / 2, (path[0][1] + path[1][1]) / 2];
         return path[0];
-    }
+    };
 
     // =================================================================
-    // --- ЛОГИКА ПАРСИНГА ФАЙЛОВ ---
+    // --- ЛОГИКА ПАРСИНГА И ФОРМИРОВАНИЯ JSON ---
     // =================================================================
 
     function gpx_parse(gpxText) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(gpxText, "text/xml");
-        const points = {}, paths = {}, waypoints = [];
+        const points = {}, paths = {};
+
+        const processPoints = (elements, nameSelector, descSelector, cmtSelector) => {
+             elements.forEach(el => {
+                const lon = parseFloat(el.getAttribute('lon'));
+                const lat = parseFloat(el.getAttribute('lat'));
+                const name = el.querySelector(nameSelector)?.textContent || '';
+                const desc = el.querySelector(descSelector)?.textContent || '';
+                const cmt = el.querySelector(cmtSelector)?.textContent || '';
+                points[uuidv4()] = {
+                    coords: [lon, lat],
+                    desc: [name, cmt, desc].filter(Boolean).join('\n')
+                };
+            });
+        };
+
         xmlDoc.querySelectorAll('trk').forEach(track => {
             const coords = Array.from(track.querySelectorAll('trkpt')).map(pt => [parseFloat(pt.getAttribute('lon')), parseFloat(pt.getAttribute('lat'))]);
             if (coords.length > 0) {
@@ -89,10 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const name = track.querySelector('name')?.textContent;
                 if (name) {
                     const mid_pt = middle_point(coords);
-                    waypoints.push({ lon: mid_pt[0], lat: mid_pt[1], name });
+                    points[uuidv4()] = { coords: mid_pt, desc: name };
                 }
             }
         });
+
         xmlDoc.querySelectorAll('rte').forEach(route => {
              const coords = Array.from(route.querySelectorAll('rtept')).map(pt => [parseFloat(pt.getAttribute('lon')), parseFloat(pt.getAttribute('lat'))]);
              if (coords.length > 0) {
@@ -100,25 +106,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const name = route.querySelector('name')?.textContent;
                 if (name) {
                     const mid_pt = middle_point(coords);
-                    waypoints.push({ lon: mid_pt[0], lat: mid_pt[1], name });
+                    points[uuidv4()] = { coords: mid_pt, desc: name };
                 }
             }
         });
-        xmlDoc.querySelectorAll('wpt').forEach(wpt => {
-            waypoints.push({
-                lon: parseFloat(wpt.getAttribute('lon')),
-                lat: parseFloat(wpt.getAttribute('lat')),
-                name: wpt.querySelector('name')?.textContent,
-                desc: wpt.querySelector('desc')?.textContent,
-                cmt: wpt.querySelector('cmt')?.textContent,
-            });
-        });
-        waypoints.forEach(wp => {
-            points[uuidv4()] = {
-                coords: [wp.lon, wp.lat],
-                desc: [wp.name, wp.cmt, wp.desc].filter(Boolean).join('\n')
-            };
-        });
+
+        processPoints(xmlDoc.querySelectorAll('wpt'), 'name', 'desc', 'cmt');
+
         return { points, paths };
     }
 
@@ -126,18 +120,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
         const points = {}, paths = {};
+
         xmlDoc.querySelectorAll('Placemark').forEach(pm => {
-            const name = pm.querySelector('name')?.textContent.trim();
+            const name = pm.querySelector('name')?.textContent.trim() || '';
             const description = (pm.querySelector('description')?.textContent || '').trim().replace(/<.*?>/g, '');
+
             const line = pm.querySelector('LineString > coordinates');
             if (line) {
                 const coords = line.textContent.trim().split(/\s+/).map(cs => cs.split(',').map(Number));
                 paths[uuidv4()] = coords;
-                if (name) points[uuidv4()] = {'coords': middle_point(coords), 'desc': name};
+                if (name) points[uuidv4()] = { coords: middle_point(coords), desc: name };
             }
-            const point = pm.querySelector('Point > coordinates');
-            if (point) {
-                const coords = point.textContent.trim().split(',').map(Number);
+
+            const pointNode = pm.querySelector('Point > coordinates');
+            if (pointNode) {
+                const coords = pointNode.textContent.trim().split(',').map(Number);
                 points[uuidv4()] = { coords, desc: [name, description].filter(Boolean).join('\n') };
             }
         });
@@ -152,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function csv_parse(csvText) {
-        const points = {};
+        const points = {}, paths = {};
         const lines = csvText.split(/\r?\n/).filter(line => line.trim());
         const headerLine = lines[0].toLowerCase();
         const hasHeader = headerLine.includes('lat') || headerLine.includes('lon');
@@ -172,16 +169,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (latIdx === -1 || lonIdx === -1) throw new Error(chrome.i18n.getMessage('errorCsvColumns'));
+
         data.forEach(line => {
             const values = line.split(',');
             const lat = parseFloat(values[latIdx]);
             const lon = parseFloat(values[lonIdx]);
             if (!isNaN(lat) && !isNaN(lon)) {
                 const desc = values.filter((_, i) => i !== latIdx && i !== lonIdx).join(', ');
-                points[uuidv4()] = { coords: [lon, lat], desc };
+                points[uuidv4()] = { coords: [lon, lat], desc: desc };
             }
         });
-        return { points, paths: {} };
+        return { points, paths };
     }
 
     // =================================================================
@@ -212,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =================================================================
-    // --- ГЛАВНАЯ ЛОГИКА ПРИЛОЖЕНИЯ ---
+    // --- ГЛАВНАЯ ЛОГИКА ---
     // =================================================================
 
     convertBtn.addEventListener('click', async () => {
