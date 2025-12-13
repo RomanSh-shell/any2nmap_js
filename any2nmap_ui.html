@@ -1,0 +1,44 @@
+<!--
+    Это HTML-фрагмент для вставки в ваше расширение.
+    Убедитесь, что вы также подключили все необходимые библиотеки:
+    - JSZip (для KMZ): <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    - osmtogeojson (для OSM): <script src="https://unpkg.com/osmtogeojson/osmtogeojson.js"></script>
+    И не забудьте подключить сам скрипт: <script src="any2nmap.js"></script>
+-->
+
+<div class="container">
+    <h1 i18n>__MSG_appName__</h1>
+
+    <div id="auth-block">
+        <p i18n>__MSG_loginRequired__</p>
+        <button id="login-yandex" i18n>__MSG_loginButton__</button>
+    </div>
+
+    <div id="app" style="display: none;">
+        <div class="input-group">
+            <label for="file-input" i18n>__MSG_fileSelectionLabel__</label>
+            <input type="file" id="file-input" accept=".gpx,.kml,.kmz,.csv,.osm">
+        </div>
+
+        <div class="input-group">
+            <label for="folder-name" i18n>__MSG_folderNameLabel__</label>
+            <input type="text" id="folder-name">
+        </div>
+
+        <div class="input-group">
+            <button id="convert-upload" i18n>__MSG_convertButton__</button>
+        </div>
+    </div>
+
+    <div id="status"></div>
+</div>
+
+<!-- Стили можно вынести в отдельный CSS-файл -->
+<style>
+    .container { max-width: 400px; font-family: sans-serif; padding: 1em; }
+    .input-group { margin-bottom: 1em; }
+    label { display: block; margin-bottom: 0.5em; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 0.5em; box-sizing: border-box; }
+    button { padding: 0.7em 1.5em; cursor: pointer; width: 100%; }
+    #status { margin-top: 1em; font-weight: bold; }
+</style>
